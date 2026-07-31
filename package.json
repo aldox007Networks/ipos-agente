@@ -1,0 +1,20 @@
+{
+  "name": "ipos-agente",
+  "productName": "Agente de impresion iPOS",
+  "version": "1.0.0",
+  "description": "Agente local de impresion ESC/POS para iPOS",
+  "author": "Aldox Networks",
+  "main": "server.js",
+  "bin": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "pkg . --targets node18-win-x64 --output dist/AgenteImpresionIPOS.exe"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  },
+  "pkg": {
+    "assets": ["escpos-lite.js", "configurar.html"],
+    "scripts": ["escpos-lite.js"]
+  }
+}

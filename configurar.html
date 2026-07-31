@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configurar Agente iPOS</title>
+<style>
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #EEF1F5; color: #1B2430; margin: 0; padding: 30px; }
+  .card { background: #fff; max-width: 480px; margin: 0 auto; border-radius: 16px; padding: 26px; box-shadow: 0 10px 40px rgba(20,33,61,.15); }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #8A93A3; font-size: 14px; margin-bottom: 20px; }
+  label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #667; display: block; margin: 14px 0 6px; }
+  select, button { font-size: 15px; padding: 12px; border-radius: 10px; box-sizing: border-box; }
+  select { width: 100%; border: 1px solid #D7DCE5; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 14px; }
+  .btn { background: #0E9F6E; color: #fff; border: none; font-weight: 800; cursor: pointer; padding: 14px; width: 100%; margin-top: 18px; }
+  .btn2 { background: #14213D; color: #fff; border: none; font-weight: 700; cursor: pointer; margin-top: 10px; }
+  .estado { padding: 10px 12px; border-radius: 8px; font-size: 14px; margin-top: 14px; }
+  .ok { background: #F0FDF4; color: #0E9F6E; }
+  .err { background: #FFF1F2; color: #E11D48; }
+  .pie { text-align: center; font-size: 12px; color: #8A93A3; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🖨️ Agente de impresión iPOS</h1>
+  <div class="sub">Configura qué impresora usará esta caja.</div>
+
+  <label>Impresora térmica</label>
+  <select id="impresora"><option>Cargando…</option></select>
+
+  <div class="row">
+    <input type="checkbox" id="gaveta">
+    <label for="gaveta" style="margin:0;text-transform:none;letter-spacing:0;font-weight:400;">Abrir gaveta de dinero al imprimir</label>
+  </div>
+
+  <button class="btn" onclick="guardar()">💾 Guardar configuración</button>
+  <button class="btn2" onclick="prueba()">🖨️ Imprimir ticket de prueba</button>
+
+  <div id="estado"></div>
+  <div class="pie">Desarrollado por Aldox Networks 2026 ®</div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:9110";
+const estado = (msg, ok) => { const e = document.getElementById("estado"); e.className = "estado " + (ok ? "ok" : "err"); e.textContent = msg; };
+
+async function cargar() {
+  try {
+    const r = await fetch(API + "/impresoras");
+    const d = await r.json();
+    const sel = document.getElementById("impresora");
+    sel.innerHTML = "";
+    d.impresoras.forEach((p) => {
+      const o = document.createElement("option");
+      o.value = p; o.textContent = p;
+      if (d.config && d.config.impresora === p) o.selected = true;
+      sel.appendChild(o);
+    });
+    if (d.config) document.getElementById("gaveta").checked = !!d.config.abrirGaveta;
+  } catch (e) {
+    estado("No se pudo conectar con el agente. ¿Está abierto el programa?", false);
+  }
+}
+
+async function guardar() {
+  try {
+    const body = { impresora: document.getElementById("impresora").value, abrirGaveta: document.getElementById("gaveta").checked };
+    const r = await fetch(API + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) estado("✓ Configuración guardada. Ya puedes cobrar e imprimir desde iPOS.", true);
+    else estado("Error: " + (d.error || ""), false);
+  } catch (e) { estado("Error al guardar: " + e, false); }
+}
+
+async function prueba() {
+  try {
+    const lineas = [
+      { t: "iPOS - PRUEBA", align: "center", bold: true, size: 2 },
+      { feed: 1 },
+      { t: "Si lees esto, la impresora", align: "center" },
+      { t: "esta configurada correctamente.", align: "center" },
+      { hr: true },
+      { row: ["Ancho 80mm", "OK"] },
+      { row: ["Corte automatico", "OK"] },
+      { hr: true },
+      { t: "Aldox Networks 2026", align: "center" },
+    ];
+    const r = await fetch(API + "/imprimir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lineas }) });
+    const d = await r.json();
+    if (d.ok) estado("✓ Ticket de prueba enviado a la impresora.", true);
+    else estado("Error: " + (d.error || ""), false);
+  } catch (e) { estado("Error al imprimir: " + e, false); }
+}
+
+cargar();
+</script>
+</body>
+</html>
