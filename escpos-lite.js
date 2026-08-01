@@ -70,32 +70,44 @@ function abrirGaveta() {
 // y el comando de copia directa al recurso de impresora.
 function imprimirRaw(nombreImpresora, buffer) {
   return new Promise((resolve, reject) => {
-    const tmp = path.join(os.tmpdir(), `ipos_${Date.now()}.bin`);
-    fs.writeFileSync(tmp, buffer);
-    // PowerShell: envío RAW al spooler por nombre de impresora
-    const ps = `
-$ErrorActionPreference='Stop';
-$bytes=[System.IO.File]::ReadAllBytes('${tmp.replace(/\\/g, "\\\\")}');
-Add-Type -TypeDefinition @"
-using System;using System.Runtime.InteropServices;using System.IO;
-public class RawPrinter{
- [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Ansi)] public struct DOCINFOA{[MarshalAs(UnmanagedType.LPStr)]public string pDocName;[MarshalAs(UnmanagedType.LPStr)]public string pOutputFile;[MarshalAs(UnmanagedType.LPStr)]public string pDataType;}
- [DllImport("winspool.Drv",EntryPoint="OpenPrinterA",SetLastError=true,CharSet=CharSet.Ansi)] public static extern bool OpenPrinter(string src,out IntPtr h,IntPtr pd);
- [DllImport("winspool.Drv",EntryPoint="ClosePrinter")] public static extern bool ClosePrinter(IntPtr h);
- [DllImport("winspool.Drv",EntryPoint="StartDocPrinterA",CharSet=CharSet.Ansi)] public static extern bool StartDocPrinter(IntPtr h,int level,ref DOCINFOA di);
- [DllImport("winspool.Drv",EntryPoint="EndDocPrinter")] public static extern bool EndDocPrinter(IntPtr h);
- [DllImport("winspool.Drv",EntryPoint="StartPagePrinter")] public static extern bool StartPagePrinter(IntPtr h);
- [DllImport("winspool.Drv",EntryPoint="EndPagePrinter")] public static extern bool EndPagePrinter(IntPtr h);
- [DllImport("winspool.Drv",EntryPoint="WritePrinter")] public static extern bool WritePrinter(IntPtr h,byte[] buf,int count,out int written);
- public static void Send(string printer,byte[] data){IntPtr h;if(!OpenPrinter(printer,out h,IntPtr.Zero))throw new Exception("No se pudo abrir la impresora");DOCINFOA di=new DOCINFOA();di.pDocName="Ticket iPOS";di.pDataType="RAW";StartDocPrinter(h,1,ref di);StartPagePrinter(h);int w;WritePrinter(h,data,data.Length,out w);EndPagePrinter(h);EndDocPrinter(h);ClosePrinter(h);}
-}
-"@;
-[RawPrinter]::Send('${nombreImpresora.replace(/'/g, "''")}',$bytes);
-`;
-    exec(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${ps.replace(/"/g, '\\"').replace(/\n/g, " ")}"`,
+    const stamp = Date.now();
+    const binPath = path.join(os.tmpdir(), `ipos_${stamp}.bin`);
+    const psPath = path.join(os.tmpdir(), `ipos_${stamp}.ps1`);
+    fs.writeFileSync(binPath, buffer);
+
+    const binEsc = binPath.replace(/\\/g, "\\\\");
+    const printerEsc = nombreImpresora.replace(/'/g, "''");
+
+    // Script PowerShell completo escrito a archivo (conserva saltos de línea,
+    // por eso el here-string @" "@ funciona sin errores).
+    const script = [
+      "$ErrorActionPreference='Stop'",
+      `$bytes=[System.IO.File]::ReadAllBytes('${binEsc}')`,
+      "$src=@'",
+      "using System;using System.Runtime.InteropServices;",
+      "public class RawPrinter{",
+      " [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Ansi)] public struct DOCINFOA{[MarshalAs(UnmanagedType.LPStr)]public string pDocName;[MarshalAs(UnmanagedType.LPStr)]public string pOutputFile;[MarshalAs(UnmanagedType.LPStr)]public string pDataType;}",
+      " [DllImport(\"winspool.Drv\",EntryPoint=\"OpenPrinterA\",SetLastError=true,CharSet=CharSet.Ansi)] public static extern bool OpenPrinter(string src,out IntPtr h,IntPtr pd);",
+      " [DllImport(\"winspool.Drv\",EntryPoint=\"ClosePrinter\")] public static extern bool ClosePrinter(IntPtr h);",
+      " [DllImport(\"winspool.Drv\",EntryPoint=\"StartDocPrinterA\",CharSet=CharSet.Ansi)] public static extern bool StartDocPrinter(IntPtr h,int level,ref DOCINFOA di);",
+      " [DllImport(\"winspool.Drv\",EntryPoint=\"EndDocPrinter\")] public static extern bool EndDocPrinter(IntPtr h);",
+      " [DllImport(\"winspool.Drv\",EntryPoint=\"StartPagePrinter\")] public static extern bool StartPagePrinter(IntPtr h);",
+      " [DllImport(\"winspool.Drv\",EntryPoint=\"EndPagePrinter\")] public static extern bool EndPagePrinter(IntPtr h);",
+      " [DllImport(\"winspool.Drv\",EntryPoint=\"WritePrinter\")] public static extern bool WritePrinter(IntPtr h,byte[] buf,int count,out int written);",
+      " public static void Send(string printer,byte[] data){IntPtr h;if(!OpenPrinter(printer,out h,IntPtr.Zero))throw new Exception(\"No se pudo abrir la impresora\");DOCINFOA di=new DOCINFOA();di.pDocName=\"Ticket iPOS\";di.pDataType=\"RAW\";StartDocPrinter(h,1,ref di);StartPagePrinter(h);int w;WritePrinter(h,data,data.Length,out w);EndPagePrinter(h);EndDocPrinter(h);ClosePrinter(h);}",
+      "}",
+      "'@",
+      "Add-Type -TypeDefinition $src",
+      `[RawPrinter]::Send('${printerEsc}',$bytes)`,
+    ].join("\r\n");
+
+    fs.writeFileSync(psPath, script, "utf8");
+
+    exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${psPath}"`,
       { windowsHide: true },
       (err, stdout, stderr) => {
-        try { fs.unlinkSync(tmp); } catch {}
+        try { fs.unlinkSync(binPath); } catch {}
+        try { fs.unlinkSync(psPath); } catch {}
         if (err) return reject(new Error(stderr || err.message));
         resolve();
       });
