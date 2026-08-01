@@ -53,8 +53,10 @@ function construir(lineas) {
 
   // avanzar y cortar
   setSize(1); setBold(false); setAlign("left");
-  push(LF, LF, LF);
-  push(GS, 0x56, 0x42, 0x00); // corte parcial
+  // avanzar el papel lo suficiente para que el ticket pase la cuchilla,
+  // luego cortar. Se usa corte total (GS V 0) por ser el más compatible.
+  push(LF, LF, LF, LF, LF);
+  push(GS, 0x56, 0x00); // GS V 0 = corte total (full cut) — el más universal
 
   return Buffer.concat(chunks);
 }
