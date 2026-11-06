@@ -16,19 +16,39 @@ const ESC = 0x1b, GS = 0x1d, LF = 0x0a;
 //   { feed: n }                          -> avanzar n líneas
 const ANCHO = 48; // caracteres por línea en 80mm fuente A
 
+// Tabla de conversión: carácter Unicode -> byte en la tabla PC850 de la impresora.
+// Solo los caracteres de español que de otro modo salen como basura.
+const PC850 = {
+  "Ç": 0x80, "ü": 0x81, "é": 0x82, "â": 0x83, "ä": 0x84, "à": 0x85, "å": 0x86,
+  "ç": 0x87, "ê": 0x88, "ë": 0x89, "è": 0x8A, "ï": 0x8B, "î": 0x8C, "ì": 0x8D,
+  "Ä": 0x8E, "Å": 0x8F, "É": 0x90, "ô": 0x93, "ö": 0x94, "ò": 0x95, "û": 0x96,
+  "ù": 0x97, "ÿ": 0x98, "Ö": 0x99, "Ü": 0x9A, "á": 0xA0, "í": 0xA1, "ó": 0xA2,
+  "ú": 0xA3, "ñ": 0xA4, "Ñ": 0xA5, "¿": 0xA8, "¡": 0xAD, "°": 0xF8,
+  "Á": 0xB5, "Í": 0xD6, "Ó": 0xE0, "Ú": 0xE9, "ü": 0x81,
+};
+// Convierte una cadena a bytes PC850 (los ASCII normales pasan igual)
+function aBytesPC850(s) {
+  const out = [];
+  for (const ch of String(s)) {
+    const code = ch.charCodeAt(0);
+    if (code < 128) out.push(code);                 // ASCII normal
+    else if (PC850[ch] != null) out.push(PC850[ch]); // acento conocido -> byte PC850
+    else out.push(0x3F);                             // desconocido -> "?"
+  }
+  return Buffer.from(out);
+}
+
 function construir(lineas) {
   const chunks = [];
   const push = (...bytes) => chunks.push(Buffer.from(bytes));
-  const texto = (s) => chunks.push(Buffer.from(s, "latin1"));
+  const texto = (s) => chunks.push(aBytesPC850(s));
 
   // init
   push(ESC, 0x40); // reset
-  push(ESC, 0x74, 0x10); // code page WPC1252 (acentos español)
+  push(ESC, 0x74, 0x02); // code page PC850 Multilingüe (acentos español en Evotec EV-3005)
 
-  // --- IMPRESIÓN MÁS OSCURA (para que el ticket se note bien) ---
-  // Esta impresora (POS-80C) NO soporta DC2 '#' ni ESC 7 (los imprimía como
-  // basura "#ÿ"), así que usamos SOLO el doble golpe, que es universal y NO
-  // se apaga con setBold. Imprime cada carácter dos veces -> más negro.
+  // --- IMPRESIÓN MÁS OSCURA ---
+  // Doble golpe: imprime cada carácter dos veces -> más negro. Universal.
   push(ESC, 0x47, 0x01); // ESC G 1 = doble golpe (double strike)
 
   const setAlign = (a) => push(ESC, 0x61, a === "center" ? 1 : a === "right" ? 2 : 0);
