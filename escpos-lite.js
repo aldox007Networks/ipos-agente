@@ -26,15 +26,14 @@ function construir(lineas) {
   push(ESC, 0x74, 0x10); // code page WPC1252 (acentos español)
 
   // --- IMPRESIÓN MÁS OSCURA (para que el ticket se note bien) ---
-  // 1) Densidad/intensidad máxima del cabezal (DC2 '#' n ; n=0..4, 4=más oscuro)
-  push(0x12, 0x23, 0x04);
-  // 2) Más calor en el cabezal: ESC 7 n1 n2 n3
-  //    n1=puntos calientes (max 7), n2=tiempo de calentamiento, n3=intervalo
-  push(ESC, 0x37, 0x07, 0xff, 0x02);
-  // 3) Doble golpe: imprime cada carácter dos veces (ESC G 1) -> más negro
-  push(ESC, 0x47, 0x01);
+  // Esta impresora (POS-80C) NO soporta DC2 '#' ni ESC 7 (los imprimía como
+  // basura "#ÿ"), así que usamos SOLO el doble golpe, que es universal y NO
+  // se apaga con setBold. Imprime cada carácter dos veces -> más negro.
+  push(ESC, 0x47, 0x01); // ESC G 1 = doble golpe (double strike)
 
   const setAlign = (a) => push(ESC, 0x61, a === "center" ? 1 : a === "right" ? 2 : 0);
+  // Negrita = enfatizado (ESC E). El doble golpe global ya aplica siempre,
+  // así que en las líneas en negrita se suma enfatizado para más contraste.
   const setBold = (b) => push(ESC, 0x45, b ? 1 : 0);
   const setSize = (n) => push(GS, 0x21, n === 2 ? 0x11 : 0x00); // 0x11 = doble alto y ancho
 
