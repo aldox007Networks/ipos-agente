@@ -16,30 +16,30 @@ const ESC = 0x1b, GS = 0x1d, LF = 0x0a;
 //   { feed: n }                          -> avanzar n líneas
 const ANCHO = 48; // caracteres por línea en 80mm fuente A
 
-// Tabla de conversión: carácter Unicode -> byte en la tabla PC850 de la impresora.
-// Solo los caracteres de español que de otro modo salen como basura.
+// Tabla de conversión: carácter Unicode -> byte en PC437/PC850, que es la
+// tabla que la impresora Evotec EV-3005 tiene cargada POR DEFECTO (lo confirmó
+// al imprimir su tabla con "PrintCodePage": Ç ü é â ä à å ç ê ë è ï î ì ...).
 const PC850 = {
   "Ç": 0x80, "ü": 0x81, "é": 0x82, "â": 0x83, "ä": 0x84, "à": 0x85, "å": 0x86,
   "ç": 0x87, "ê": 0x88, "ë": 0x89, "è": 0x8A, "ï": 0x8B, "î": 0x8C, "ì": 0x8D,
-  "Ä": 0x8E, "Å": 0x8F, "É": 0x90, "ô": 0x93, "ö": 0x94, "ò": 0x95, "û": 0x96,
-  "ù": 0x97, "ÿ": 0x98, "Ö": 0x99, "Ü": 0x9A, "á": 0xA0, "í": 0xA1, "ó": 0xA2,
-  "ú": 0xA3, "ñ": 0xA4, "Ñ": 0xA5, "¿": 0xA8, "¡": 0xAD, "°": 0xF8,
-  "Á": 0xB5, "Í": 0xD6, "Ó": 0xE0, "Ú": 0xE9, "ü": 0x81,
+  "Ä": 0x8E, "Å": 0x8F, "É": 0x90, "æ": 0x91, "Æ": 0x92, "ô": 0x93, "ö": 0x94,
+  "ò": 0x95, "û": 0x96, "ù": 0x97, "ÿ": 0x98, "Ö": 0x99, "Ü": 0x9A,
+  "á": 0xA0, "í": 0xA1, "ó": 0xA2, "ú": 0xA3, "ñ": 0xA4, "Ñ": 0xA5,
+  "ª": 0xA6, "º": 0xA7, "¿": 0xA8, "¡": 0xAD, "°": 0xF8,
 };
-// Convierte una cadena a bytes PC850 (los ASCII normales pasan igual)
+// Convierte una cadena a bytes PC437/PC850 (los ASCII normales pasan igual)
 function aBytesPC850(s) {
   // Normalizar a NFC: une "o" + tilde combinante en un solo carácter "ó".
-  // (Sin esto, un acento que venga descompuesto se perdía y dejaba un hueco.)
   const txt = String(s).normalize("NFC");
   const out = [];
   for (const ch of txt) {
     const code = ch.codePointAt(0);
-    if (code < 128) out.push(code);                 // ASCII normal
-    else if (PC850[ch] != null) out.push(PC850[ch]); // acento conocido -> byte PC850
+    if (code < 128) out.push(code);                  // ASCII normal
+    else if (PC850[ch] != null) out.push(PC850[ch]);  // acento -> byte PC437/PC850
     else if (code === 0x2013 || code === 0x2014) out.push(0x2D); // guiones largos -> "-"
     else if (code === 0x2018 || code === 0x2019) out.push(0x27); // comillas curvas -> '
     else if (code === 0x201C || code === 0x201D) out.push(0x22); // comillas dobles -> "
-    else out.push(0x3F);                             // desconocido -> "?"
+    else out.push(0x3F);                              // desconocido -> "?"
   }
   return Buffer.from(out);
 }
@@ -51,7 +51,8 @@ function construir(lineas) {
 
   // init
   push(ESC, 0x40); // reset
-  push(ESC, 0x74, 0x02); // code page PC850 Multilingüe (acentos español en Evotec EV-3005)
+  // NO cambiamos el code page: la impresora ya viene con PC437/PC850 por defecto
+  // (lo confirmó su PrintCodePage) y nuestra tabla envía los acentos a esos bytes.
 
   // --- IMPRESIÓN MÁS OSCURA ---
   // Doble golpe: imprime cada carácter dos veces -> más negro. Universal.
