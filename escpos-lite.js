@@ -16,30 +16,32 @@ const ESC = 0x1b, GS = 0x1d, LF = 0x0a;
 //   { feed: n }                          -> avanzar n líneas
 const ANCHO = 48; // caracteres por línea en 80mm fuente A
 
-// Tabla de conversión: carácter Unicode -> byte en PC437/PC850, que es la
-// tabla que la impresora Evotec EV-3005 tiene cargada POR DEFECTO (lo confirmó
-// al imprimir su tabla con "PrintCodePage": Ç ü é â ä à å ç ê ë è ï î ì ...).
-const PC850 = {
-  "Ç": 0x80, "ü": 0x81, "é": 0x82, "â": 0x83, "ä": 0x84, "à": 0x85, "å": 0x86,
-  "ç": 0x87, "ê": 0x88, "ë": 0x89, "è": 0x8A, "ï": 0x8B, "î": 0x8C, "ì": 0x8D,
-  "Ä": 0x8E, "Å": 0x8F, "É": 0x90, "æ": 0x91, "Æ": 0x92, "ô": 0x93, "ö": 0x94,
-  "ò": 0x95, "û": 0x96, "ù": 0x97, "ÿ": 0x98, "Ö": 0x99, "Ü": 0x9A,
-  "á": 0xA0, "í": 0xA1, "ó": 0xA2, "ú": 0xA3, "ñ": 0xA4, "Ñ": 0xA5,
-  "ª": 0xA6, "º": 0xA7, "¿": 0xA8, "¡": 0xAD, "°": 0xF8,
+// Mapa de "quitar acento": cada letra acentuada -> su letra base ASCII.
+// Esto es a prueba de balas: usa solo ASCII puro, que CUALQUIER impresora
+// imprime igual, sin importar su tabla de caracteres (code page) interna.
+// Así "Habitación" sale "Habitacion" -> completa y legible, nunca con huecos.
+const SIN_ACENTO = {
+  "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "ü": "u",
+  "Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U", "Ü": "U",
+  "à": "a", "è": "e", "ì": "i", "ò": "o", "ù": "u",
+  "â": "a", "ê": "e", "î": "i", "ô": "o", "û": "u",
+  "ä": "a", "ë": "e", "ï": "i", "ö": "o",
+  "ñ": "n", "Ñ": "N", "ç": "c", "Ç": "C",
+  "¿": "", "¡": "", "°": "o", "ª": "a", "º": "o",
+  "“": '"', "”": '"', "‘": "'", "’": "'", "–": "-", "—": "-", "€": "EUR",
 };
-// Convierte una cadena a bytes PC437/PC850 (los ASCII normales pasan igual)
+// Convierte una cadena a bytes ASCII puros (sin acentos). A prueba de code pages.
 function aBytesPC850(s) {
-  // Normalizar a NFC: une "o" + tilde combinante en un solo carácter "ó".
   const txt = String(s).normalize("NFC");
   const out = [];
   for (const ch of txt) {
     const code = ch.codePointAt(0);
-    if (code < 128) out.push(code);                  // ASCII normal
-    else if (PC850[ch] != null) out.push(PC850[ch]);  // acento -> byte PC437/PC850
-    else if (code === 0x2013 || code === 0x2014) out.push(0x2D); // guiones largos -> "-"
-    else if (code === 0x2018 || code === 0x2019) out.push(0x27); // comillas curvas -> '
-    else if (code === 0x201C || code === 0x201D) out.push(0x22); // comillas dobles -> "
-    else out.push(0x3F);                              // desconocido -> "?"
+    if (code < 128) { out.push(code); continue; }      // ASCII normal, pasa igual
+    if (SIN_ACENTO[ch] != null) {                      // letra acentuada -> base
+      for (const c of SIN_ACENTO[ch]) out.push(c.charCodeAt(0));
+    } else {
+      out.push(0x3F);                                  // cualquier otro -> "?"
+    }
   }
   return Buffer.from(out);
 }
