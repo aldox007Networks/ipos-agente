@@ -28,11 +28,17 @@ const PC850 = {
 };
 // Convierte una cadena a bytes PC850 (los ASCII normales pasan igual)
 function aBytesPC850(s) {
+  // Normalizar a NFC: une "o" + tilde combinante en un solo carácter "ó".
+  // (Sin esto, un acento que venga descompuesto se perdía y dejaba un hueco.)
+  const txt = String(s).normalize("NFC");
   const out = [];
-  for (const ch of String(s)) {
-    const code = ch.charCodeAt(0);
+  for (const ch of txt) {
+    const code = ch.codePointAt(0);
     if (code < 128) out.push(code);                 // ASCII normal
     else if (PC850[ch] != null) out.push(PC850[ch]); // acento conocido -> byte PC850
+    else if (code === 0x2013 || code === 0x2014) out.push(0x2D); // guiones largos -> "-"
+    else if (code === 0x2018 || code === 0x2019) out.push(0x27); // comillas curvas -> '
+    else if (code === 0x201C || code === 0x201D) out.push(0x22); // comillas dobles -> "
     else out.push(0x3F);                             // desconocido -> "?"
   }
   return Buffer.from(out);
